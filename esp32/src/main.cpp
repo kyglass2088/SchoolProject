@@ -11,21 +11,20 @@ constexpr char PARKING_SPOT_ID[] = "A-01";
 
 // ===== 천장 센서 2개 =====
 // 안쪽: 물 분사 뒤의 습도 변화까지 확인하는 DHT22
-constexpr uint8_t DHT_PIN = 15;
+constexpr uint8_t DHT_PIN = 33;
 // 바깥쪽: I2C 통신 MLX90614
-constexpr uint8_t I2C_SDA_PIN = 21;
-constexpr uint8_t I2C_SCL_PIN = 22;
+constexpr uint8_t I2C_SDA_PIN = 2;
+constexpr uint8_t I2C_SCL_PIN = 15;
 
 // ===== RGB LED =====
 constexpr uint8_t LED_RED_PIN = 12;
-constexpr uint8_t LED_GREEN_PIN = 13;
-constexpr uint8_t LED_BLUE_PIN = 14;
+constexpr uint8_t LED_GREEN_PIN = 14;
+constexpr uint8_t LED_BLUE_PIN = 13;
 constexpr bool RGB_ACTIVE_HIGH = true; // 공통 양극 모듈이면 false
 
 // ===== 화재 대응 장치 =====
 constexpr uint8_t BARRIER_RELAY_PIN = 26;
-constexpr uint8_t PUMP_RELAY_PIN = 27;
-constexpr uint8_t STATUS_LED_PIN = 2;
+constexpr uint8_t PUMP_RELAY_PIN = 32;
 constexpr uint8_t RELAY_ON = LOW;     // active-high 릴레이면 HIGH
 constexpr uint8_t RELAY_OFF = HIGH;   // active-high 릴레이면 LOW
 
@@ -144,7 +143,6 @@ void activateFireResponse() {
   pumpActive = false;
   digitalWrite(BARRIER_RELAY_PIN, RELAY_ON);
   digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
-  digitalWrite(STATUS_LED_PIN, HIGH);
   showState(DisplayState::FIRE);
   barrierActivatedMs = millis();
 }
@@ -154,7 +152,6 @@ void resetFireResponse() {
   pumpActive = false;
   digitalWrite(BARRIER_RELAY_PIN, RELAY_OFF);
   digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
-  digitalWrite(STATUS_LED_PIN, LOW);
   showState(DisplayState::NORMAL);
 }
 
@@ -310,7 +307,6 @@ void setup() {
   pinMode(LED_BLUE_PIN, OUTPUT);
   pinMode(BARRIER_RELAY_PIN, OUTPUT);
   pinMode(PUMP_RELAY_PIN, OUTPUT);
-  pinMode(STATUS_LED_PIN, OUTPUT);
 
   Serial.begin(115200);
   Serial.setTimeout(50);

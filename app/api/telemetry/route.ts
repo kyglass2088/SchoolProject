@@ -16,6 +16,9 @@ const TelemetrySchema = z.object({
   sensorOk: z.boolean(),
   temperatureC: z.number().min(-50).max(200).optional(),
   humidityPct: z.number().min(0).max(100).optional(),
+  outsideTemperatureC: z.number().min(-50).max(200).optional(),
+  outsideObjectTemperatureC: z.number().min(-50).max(380).optional(),
+  insideOutsideDeltaC: z.number().min(-250).max(250).optional(),
   emergencyActive: z.boolean().optional().default(false),
 }).refine((value) => !value.sensorOk || value.temperatureC !== undefined, {
   message: "temperatureC is required when sensorOk is true",
