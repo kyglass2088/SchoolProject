@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "EV 화재 안전",
+    "slug": "ev-fire-parking",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-notifications"
+    ],
+    "android": {
+      "package": "com.example.evfireparking"
+    },
+    "ios": {
+      "bundleIdentifier": "com.example.evfireparking"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4329c4d5-864c-4305-86ee-67098c221504"
+      }
+    },
+    "owner": "kyglasss-team"
+  }
+}

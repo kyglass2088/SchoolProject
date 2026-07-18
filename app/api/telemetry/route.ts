@@ -4,6 +4,7 @@ import { rejectUnauthorizedGateway } from "../../../lib/auth";
 import { pool, transaction } from "../../../lib/db";
 import { decideFire } from "../../../lib/fire";
 import { sendExpoPush } from "../../../lib/push";
+import { ensureSensorColumns } from "../../../lib/schema";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
   }
   const input = parsed.data;
   const receivedAt = new Date();
+  await ensureSensorColumns();
 
   const spot = await pool.query("SELECT owner_user_id FROM parking_spots WHERE id = $1", [input.parkingSpotId]);
   if (spot.rowCount === 0) {
@@ -49,19 +51,31 @@ export async function POST(request: NextRequest) {
   );
 
   await pool.query(
-    `INSERT INTO devices(id, parking_spot_id, last_seen_at, last_temperature_c, last_humidity_pct)
-     VALUES($1, $2, $3, $4, $5)
+    `INSERT INTO devices(id, parking_spot_id, last_seen_at, last_temperature_c, last_humidity_pct,
+                         last_outside_temperature_c, last_outside_object_temperature_c,
+                         last_inside_outside_delta_c)
+     VALUES($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT(id) DO UPDATE SET parking_spot_id = EXCLUDED.parking_spot_id,
        last_seen_at = EXCLUDED.last_seen_at, last_temperature_c = EXCLUDED.last_temperature_c,
-       last_humidity_pct = EXCLUDED.last_humidity_pct`,
-    [input.deviceId, input.parkingSpotId, receivedAt, input.temperatureC ?? null, input.humidityPct ?? null],
+       last_humidity_pct = EXCLUDED.last_humidity_pct,
+       last_outside_temperature_c = EXCLUDED.last_outside_temperature_c,
+       last_outside_object_temperature_c = EXCLUDED.last_outside_object_temperature_c,
+       last_inside_outside_delta_c = EXCLUDED.last_inside_outside_delta_c`,
+    [input.deviceId, input.parkingSpotId, receivedAt, input.temperatureC ?? null, input.humidityPct ?? null,
+      input.outsideTemperatureC ?? null, input.outsideObjectTemperatureC ?? null,
+      input.insideOutsideDeltaC ?? null],
   );
 
   await pool.query(
-    `INSERT INTO telemetry(device_id, parking_spot_id, boot_id, sequence, temperature_c, humidity_pct, sensor_ok, emergency_active, received_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(device_id, boot_id, sequence) DO NOTHING`,
+    `INSERT INTO telemetry(device_id, parking_spot_id, boot_id, sequence, temperature_c, humidity_pct,
+                           outside_temperature_c, outside_object_temperature_c, inside_outside_delta_c,
+                           sensor_ok, emergency_active, received_at)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT(device_id, boot_id, sequence) DO NOTHING`,
     [input.deviceId, input.parkingSpotId, input.bootId, input.sequence, input.temperatureC ?? null,
-      input.humidityPct ?? null, input.sensorOk, input.emergencyActive, receivedAt],
+      input.humidityPct ?? null, input.outsideTemperatureC ?? null,
+      input.outsideObjectTemperatureC ?? null, input.insideOutsideDeltaC ?? null,
+      input.sensorOk, input.emergencyActive, receivedAt],
   );
 
   if (!input.sensorOk || input.temperatureC === undefined) {
@@ -71,7 +85,13 @@ export async function POST(request: NextRequest) {
   const previous = previousResult.rows[0]
     ? { temperatureC: Number(previousResult.rows[0].temperature_c), receivedAt: new Date(previousResult.rows[0].received_at) }
     : null;
-  const decision = decideFire(input.temperatureC, receivedAt, previous);
+  const decision = decideFire({
+    temperatureC: input.temperatureC,
+    humidityPct: input.humidityPct,
+    outsideTemperatureC: input.outsideTemperatureC,
+    outsideObjectTemperatureC: input.outsideObjectTemperatureC,
+    insideOutsideDeltaC: input.insideOutsideDeltaC,
+  }, receivedAt, previous);
   let command: CommandDto | null = null;
   let notification: { tokens: string[]; eventId: string } | null = null;
 
@@ -84,10 +104,14 @@ export async function POST(request: NextRequest) {
       try {
         const created = await transaction(async (client) => {
           const event = await client.query(
-            `INSERT INTO fire_events(device_id, parking_spot_id, owner_user_id, status, reason, temperature_c, rise_c_per_min)
-             VALUES($1,$2,$3,'active',$4,$5,$6) RETURNING id`,
+            `INSERT INTO fire_events(device_id, parking_spot_id, owner_user_id, status, reason,
+                                     temperature_c, humidity_pct, outside_temperature_c,
+                                     outside_object_temperature_c, inside_outside_delta_c, rise_c_per_min)
+             VALUES($1,$2,$3,'active',$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
             [input.deviceId, input.parkingSpotId, spot.rows[0].owner_user_id, decision.reason,
-              input.temperatureC, decision.riseCPerMin],
+              input.temperatureC, input.humidityPct ?? null, input.outsideTemperatureC ?? null,
+              input.outsideObjectTemperatureC ?? null, decision.insideOutsideDeltaC,
+              decision.riseCPerMin],
           );
           const commandResult = await client.query(
             `INSERT INTO commands(device_id, fire_event_id, action, reason)

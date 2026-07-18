@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS devices (
   last_seen_at timestamptz,
   last_temperature_c double precision,
   last_humidity_pct double precision,
+  last_outside_temperature_c double precision,
+  last_outside_object_temperature_c double precision,
+  last_inside_outside_delta_c double precision,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS telemetry (
   sequence bigint NOT NULL,
   temperature_c double precision,
   humidity_pct double precision,
+  outside_temperature_c double precision,
+  outside_object_temperature_c double precision,
+  inside_outside_delta_c double precision,
   sensor_ok boolean NOT NULL,
   emergency_active boolean NOT NULL DEFAULT false,
   received_at timestamptz NOT NULL DEFAULT now(),
@@ -48,12 +54,31 @@ CREATE TABLE IF NOT EXISTS fire_events (
   status text NOT NULL CHECK (status IN ('active', 'resolved')),
   reason text NOT NULL,
   temperature_c double precision NOT NULL,
+  humidity_pct double precision,
+  outside_temperature_c double precision,
+  outside_object_temperature_c double precision,
+  inside_outside_delta_c double precision,
   rise_c_per_min double precision,
   started_at timestamptz NOT NULL DEFAULT now(),
   resolved_at timestamptz
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_fire_per_spot_idx
   ON fire_events(parking_spot_id) WHERE status = 'active';
+
+-- 기존 Neon DB에도 새 센서 열을 추가한다. 반복 실행해도 안전하다.
+ALTER TABLE devices
+  ADD COLUMN IF NOT EXISTS last_outside_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS last_outside_object_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS last_inside_outside_delta_c double precision;
+ALTER TABLE telemetry
+  ADD COLUMN IF NOT EXISTS outside_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS outside_object_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS inside_outside_delta_c double precision;
+ALTER TABLE fire_events
+  ADD COLUMN IF NOT EXISTS humidity_pct double precision,
+  ADD COLUMN IF NOT EXISTS outside_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS outside_object_temperature_c double precision,
+  ADD COLUMN IF NOT EXISTS inside_outside_delta_c double precision;
 
 CREATE TABLE IF NOT EXISTS commands (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
